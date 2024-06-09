@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'dart:convert';
 
 void main() {
   runApp(MyApp());
@@ -9,7 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false, // Remove debug banner
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -34,6 +37,42 @@ class _SpeechScreenState extends State<SpeechScreen> {
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    _loadSpeeches();
+  }
+
+  void _loadSpeeches() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? speechesString = prefs.getString('speeches');
+    if (speechesString != null) {
+      setState(() {
+        _speeches =
+            List<Map<String, dynamic>>.from(json.decode(speechesString));
+      });
+    }
+  }
+
+  void _saveSpeeches() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString('speeches', json.encode(_speeches));
+  }
+
+  void _deleteSpeech(int index) {
+    setState(() {
+      _speeches.removeAt(index);
+    });
+    _saveSpeeches();
+  }
+
+  Widget _buildLogo() {
+    File file = File('assets/images/logo.png');
+    if (file.existsSync()) {
+      return Image.asset(
+        'assets/images/logo.png',
+        height: 40.0,
+      );
+    } else {
+      return SizedBox(); // Returns an empty SizedBox if image doesn't exist
+    }
   }
 
   @override
@@ -43,27 +82,14 @@ class _SpeechScreenState extends State<SpeechScreen> {
         title: Row(
           children: [
             Image.asset(
-              '../assets/images/logo.png', // Ensure this image is in your assets folder and referenced in pubspec.yaml
-              height: 40.0,
+              'assets/images/EchoScript_transparent.png',
+              height: 60.0,
             ),
             SizedBox(width: 10.0),
-            Text('speak_2_script'),
-            Spacer(),
-            IconButton(
-              icon: Icon(Icons.account_circle),
-              onPressed: () {
-                // Handle profile button press
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.settings),
-              onPressed: () {
-                // Handle settings button press
-              },
-            ),
+            Text('EchoScript'),
           ],
         ),
-        centerTitle: false,
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         reverse: true,
@@ -72,10 +98,6 @@ class _SpeechScreenState extends State<SpeechScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Press the button and start speaking",
-                style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
-              ),
               SizedBox(height: 20.0),
               Container(
                 padding: const EdgeInsets.all(10.0),
@@ -97,8 +119,12 @@ class _SpeechScreenState extends State<SpeechScreen> {
                         style: TextStyle(fontSize: 18.0),
                       ),
                       subtitle: Text(
-                        s['time'].toString(),
+                        _formatDateTime(DateTime.parse(s['time'])),
                         style: TextStyle(fontSize: 14.0, color: Colors.grey),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(Icons.delete),
+                        onPressed: () => _deleteSpeech(_speeches.indexOf(s)),
                       ),
                     ),
                   )),
@@ -130,13 +156,20 @@ class _SpeechScreenState extends State<SpeechScreen> {
           onResult: (val) => setState(() {
             _text = val.recognizedWords;
             if (val.finalResult) {
-              _speeches.insert(
-                  0, {'text': val.recognizedWords, 'time': DateTime.now()});
+              _speeches.insert(0, {
+                'text': val.recognizedWords,
+                'time': DateTime.now().toIso8601String()
+              });
               _text = "Press the button and start speaking";
+              _saveSpeeches();
             }
           }),
         );
       }
     }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return "${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute}";
   }
 }
